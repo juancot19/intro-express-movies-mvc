@@ -1,5 +1,5 @@
-import createError from "http-errors";
-import Movie from "../models/movie.model.js";
+import createError from 'http-errors';
+import Movie from '../lib/models/movie.model.js';
 
 async function list(req, res) {
   const movies = await Movie.find();
@@ -7,10 +7,10 @@ async function list(req, res) {
 }
 
 async function detail(req, res) {
-  const movie = await Movie.findById(req.params.id).populate("ratings");
+  const movie = await Movie.findById(req.params.id).populate('ratings');
 
   if (!movie) {
-    throw createError(404, "Movie not found");
+    throw createError(404, 'Movie not found');
   }
 
   res.json(movie);
@@ -28,7 +28,7 @@ async function update(req, res) {
   });
 
   if (!movie) {
-    throw createError(404, "Movie not found");
+    throw createError(404, 'Movie not found');
   }
 
   res.json(movie);
@@ -38,7 +38,7 @@ async function deleteMovie(req, res) {
   const movie = await Movie.findByIdAndDelete(req.params.id);
 
   if (!movie) {
-    throw createError(404, "Movie not found");
+    throw createError(404, 'Movie not found');
   }
 
   res.status(204).send();

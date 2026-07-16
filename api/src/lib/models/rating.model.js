@@ -1,10 +1,10 @@
-import { Schema, model } from "mongoose";
+import { Schema, model } from 'mongoose';
 
 const ratingSchema = new Schema(
   {
     movie: {
       type: Schema.Types.ObjectId,
-      ref: "Movie",
+      ref: 'Movie',
       required: true,
     },
     text: {
@@ -27,6 +27,6 @@ const ratingSchema = new Schema(
   },
 );
 
-const Rating = model("Rating", ratingSchema);
+const Rating = model('Rating', ratingSchema);
 
 export default Rating;

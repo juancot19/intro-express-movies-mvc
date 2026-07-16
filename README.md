@@ -11,24 +11,52 @@ Tu misión es **añadir un sistema de usuarios con autenticación básica**, apr
 - Tener [Node.js](https://nodejs.org/) instalado (v22 o superior).
 - Tener [MongoDB](https://www.mongodb.com/) corriendo en local.
 
+## Configuración inicial
+
+```bash
+cd api
+cp .env.template .env
+npm install
+```
+
+Para lanzar el servidor en modo desarrollo:
+
+```bash
+npm run dev
+```
+
+Para ejecutar los tests:
+
+```bash
+npm test
+```
+
 ## Punto de partida
 
 El proyecto ya tiene un CRUD funcional de películas y valoraciones con la siguiente estructura:
 
 ```
-app.js                              ← Servidor Express
-app.test.js                         ← Tests (tu guía para saber si vas bien)
-config/
-  db.config.js                      ← Conexión a MongoDB
-  routes.config.js                  ← Definición de rutas
-controllers/
-  movie.controller.js               ← Controlador de películas
-  rating.controller.js              ← Controlador de valoraciones
-models/
-  movie.model.js                    ← Modelo de película
-  rating.model.js                   ← Modelo de valoración
-middlewares/
-  error-handler.middleware.js        ← Middleware de errores
+api/
+  .env.template                         ← Variables de entorno (copia a .env)
+  .gitignore
+  package.json
+  app.test.js                           ← Tests (tu guía para saber si vas bien)
+  src/
+    app.js                              ← Servidor Express
+    controllers/
+      index.js                          ← Definición de rutas
+      movie.controller.js               ← Controlador de películas
+      rating.controller.js              ← Controlador de valoraciones
+    lib/
+      config.js                         ← Configuración (puerto, URI de MongoDB)
+      db.js                             ← Conexión a MongoDB
+      logger.js                         ← Logger (pino)
+      models/
+        movie.model.js                  ← Modelo de película
+        rating.model.js                 ← Modelo de valoración
+    middlewares/
+      errors.mid.js                     ← Middleware centralizado de errores
+      index.js                          ← Barrel de middlewares
 ```
 
 ### Endpoints existentes
@@ -48,31 +76,9 @@ middlewares/
 
 ## Instrucciones
 
-### Configuración inicial
-
-```bash
-npm install
-```
-
-### Ejecutar los tests
-
-Los tests son tu guía principal. Al principio, muchos tests fallarán porque los usuarios no están implementados. Tu objetivo es hacer que **todos los tests pasen**.
-
-```bash
-npm test
-```
-
-Para lanzar el servidor en modo desarrollo:
-
-```bash
-npm run dev
-```
-
----
-
 ### Iteración 1: Crear el modelo `User`
 
-Crea el archivo `models/user.model.js` con el siguiente esquema:
+Crea el archivo `src/lib/models/user.model.js` con el siguiente esquema:
 
 | Campo       | Tipo     | Validaciones                                                              |
 | ----------- | -------- | ------------------------------------------------------------------------- |
@@ -84,15 +90,14 @@ Crea el archivo `models/user.model.js` con el siguiente esquema:
 
 **Puntos clave:**
 
-1. Configura el esquema con `timestamps: true` para que Mongoose añada automáticamente los campos `createdAt` y `updatedAt`.
-2. Configura `toJSON` con `virtuals: true` y una función `transform` que elimine los campos `password` y `_id` de las respuestas JSON. Esto es importante por seguridad: **nunca debes enviar la contraseña al cliente**.
-3. El campo `email` debe tener `unique: true` para evitar registros duplicados.
-4. El validador de `birthDate` debe calcular la edad del usuario comparando su fecha de nacimiento con la fecha actual.
+1. Configura el esquema con `timestamps: true`.
+2. Configura `toJSON` con `virtuals: true` y una función `transform` que elimine `password` y `_id` de las respuestas JSON.
+3. El validador de `birthDate` debe calcular la edad del usuario comparando su fecha de nacimiento con la fecha actual.
 
 **Pista:**
 
 ```js
-import { Schema, model } from "mongoose";
+import { Schema, model } from 'mongoose';
 
 const userSchema = new Schema(
   {
@@ -111,7 +116,7 @@ const userSchema = new Schema(
         validator: function (value) {
           // Calcula la edad y devuelve true si es >= 18
         },
-        message: "User must be at least 18 years old",
+        message: 'User must be at least 18 years old',
       },
     },
   },
@@ -120,7 +125,6 @@ const userSchema = new Schema(
     toJSON: {
       virtuals: true,
       transform: (doc, ret) => {
-        // Elimina password y _id del objeto JSON
         delete ret.password;
         delete ret._id;
         return ret;
@@ -129,7 +133,7 @@ const userSchema = new Schema(
   },
 );
 
-const User = model("User", userSchema);
+const User = model('User', userSchema);
 
 export default User;
 ```
@@ -139,10 +143,6 @@ export default User;
 ### Iteración 2: Cifrado de contraseña con bcrypt
 
 Antes de guardar un usuario en la base de datos, necesitamos **cifrar su contraseña**. Nunca debemos almacenar contraseñas en texto plano.
-
-#### ¿Qué es bcrypt?
-
-**bcrypt** es una librería de hashing diseñada específicamente para contraseñas. A diferencia de algoritmos como MD5 o SHA, bcrypt es **intencionalmente lento** y añade un "salt" aleatorio a cada hash, haciendo que dos contraseñas iguales generen hashes diferentes.
 
 Primero, instala la dependencia:
 
@@ -157,10 +157,10 @@ Mongoose permite definir **middlewares** que se ejecutan antes o después de cie
 Añade el siguiente middleware a tu esquema de usuario, **antes** de crear el modelo:
 
 ```js
-import bcrypt from "bcrypt";
+import bcrypt from 'bcrypt';
 
-userSchema.pre("save", async function () {
-  if (this.isModified("password")) {
+userSchema.pre('save', async function () {
+  if (this.isModified('password')) {
     this.password = await bcrypt.hash(this.password, 10);
   }
 });
@@ -168,26 +168,26 @@ userSchema.pre("save", async function () {
 
 #### ¿Por qué `this.isModified("password")`?
 
-El middleware `pre("save")` se ejecuta **cada vez** que se llama a `.save()`, no solo al crear un usuario. Si un usuario actualiza su bio, no queremos re-cifrar la contraseña (que ya está cifrada). `isModified("password")` devuelve `true` solo si el campo `password` ha sido modificado, evitando cifrar un hash que ya estaba cifrado.
+El middleware `pre("save")` se ejecuta **cada vez** que se llama a `.save()`. Si un usuario actualiza su bio, no queremos re-cifrar la contraseña (que ya está cifrada). `isModified("password")` devuelve `true` solo si el campo `password` ha sido modificado.
 
 #### Implicación importante para el update
 
-Esto significa que **no puedes usar `findByIdAndUpdate()`** para actualizar usuarios, porque este método **no dispara** el middleware `pre("save")`. En su lugar, deberás:
+No puedes usar `findByIdAndUpdate()` para actualizar usuarios, porque este método **no dispara** el middleware `pre("save")`. En su lugar:
 
-1. Buscar el usuario con `findById()`
-2. Asignar los nuevos valores con `Object.assign()`
-3. Guardar con `.save()` (esto sí dispara el `pre("save")`)
+1. Busca el usuario con `findById()`
+2. Asigna los nuevos valores con `Object.assign()`
+3. Guarda con `.save()`
 
 ---
 
 ### Iteración 3: Crear el controlador CRUD de Users
 
-Crea el archivo `controllers/user.controller.js` con las siguientes funciones:
+Crea el archivo `src/controllers/user.controller.js` con las siguientes funciones:
 
 - **`list(req, res)`** — Devuelve todos los usuarios.
 - **`detail(req, res)`** — Devuelve un usuario por ID. Si no existe, lanza un error 404.
 - **`create(req, res)`** — Crea un nuevo usuario. Devuelve 201.
-- **`update(req, res)`** — Actualiza un usuario por ID. **Debe usar `findById` + `Object.assign` + `.save()`** para que el middleware `pre("save")` se ejecute y cifre la contraseña si fue modificada. Si no existe, lanza un error 404.
+- **`update(req, res)`** — Actualiza un usuario por ID. Usa `findById` + `Object.assign` + `.save()`. Si no existe, lanza un error 404.
 - **`delete(req, res)`** — Elimina un usuario por ID. Si no existe, lanza un error 404. Devuelve 204.
 
 **Pista — La función `update` debe seguir este patrón:**
@@ -197,7 +197,7 @@ async function update(req, res) {
   const user = await User.findById(req.params.id);
 
   if (!user) {
-    throw createError(404, "User not found");
+    throw createError(404, 'User not found');
   }
 
   Object.assign(user, req.body);
@@ -207,48 +207,40 @@ async function update(req, res) {
 }
 ```
 
-> 💡 **¿Por qué `Object.assign`?** Este método copia las propiedades de `req.body` al documento `user` existente. Así, solo se modifican los campos que envía el cliente. Después, `.save()` dispara el middleware `pre("save")` que cifrará la contraseña si fue modificada.
-
 ---
 
 ### Iteración 4: Añadir las rutas
 
-Abre `config/routes.config.js` y añade las rutas para el CRUD de usuarios:
+Abre `src/controllers/index.js` y añade las rutas para el CRUD de usuarios:
 
-| Método   | Ruta              | Controlador            |
-| -------- | ----------------- | ---------------------- |
+| Método   | Ruta              | Controlador             |
+| -------- | ----------------- | ----------------------- |
 | `GET`    | `/api/users`      | `userController.list`   |
 | `GET`    | `/api/users/:id`  | `userController.detail` |
 | `POST`   | `/api/users`      | `userController.create` |
 | `PATCH`  | `/api/users/:id`  | `userController.update` |
 | `DELETE` | `/api/users/:id`  | `userController.delete` |
 
-Recuerda importar el controlador al principio del archivo.
-
 ---
 
 ### Iteración 5: Ejecutar los tests
-
-Ejecuta los tests para comprobar que todo funciona correctamente:
 
 ```bash
 npm test
 ```
 
-Todos los tests deberían pasar. Si alguno falla, revisa:
+Si algún test falla, revisa:
 
 - ¿El modelo `User` tiene todas las validaciones (`required`, `unique`, `match`, `minlength`)?
 - ¿Has configurado `toJSON` con `transform` para ocultar `password` y `_id`?
 - ¿Has añadido el middleware `pre("save")` con `bcrypt`?
-- ¿El controlador `update` usa `findById` + `Object.assign` + `.save()` en lugar de `findByIdAndUpdate`?
-- ¿Has registrado las rutas en `routes.config.js` con el prefijo `/api/users`?
+- ¿El controlador `update` usa `findById` + `Object.assign` + `.save()`?
+- ¿Has registrado las rutas en `src/controllers/index.js`?
 - ¿El validador de `birthDate` calcula correctamente si el usuario tiene al menos 18 años?
 
 ---
 
 ## Resultado esperado
-
-Cuando hayas terminado:
 
 **Users CRUD:**
 
@@ -273,23 +265,6 @@ Cuando hayas terminado:
   "createdAt": "2026-02-21T10:30:00.000Z",
   "updatedAt": "2026-02-21T10:30:00.000Z"
 }
-```
-
-> Nota: el campo `password` **no aparece** en la respuesta gracias a la función `transform` del esquema.
-
-**Ejemplo de respuesta `GET /api/users`:**
-
-```json
-[
-  {
-    "id": "abc123",
-    "email": "ana@example.com",
-    "fullName": "Ana García",
-    "birthDate": "1995-03-15T00:00:00.000Z",
-    "createdAt": "2026-02-21T10:30:00.000Z",
-    "updatedAt": "2026-02-21T10:30:00.000Z"
-  }
-]
 ```
 
 Happy coding! 💙
