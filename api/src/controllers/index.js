@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import movieController from './movie.controller.js';
 import ratingController from './rating.controller.js';
+import userController from "./user.controller.js";
+
 
 const router = Router();
 
@@ -21,5 +23,12 @@ router.delete('/ratings/:id', ratingController.delete);
 // TODO Iteración 4: añadir rutas de usuarios aquí
 // router.get('/api/users', userController.list);
 // ...
+
+router.get("/api/users", userController.list);
+router.get("/api/users/:id", userController.detail);
+router.post("/api/users", userController.create);
+router.patch("/api/users/:id", userController.update);
+router.delete("/api/users/:id", userController.delete);
+
 
 export default router;
